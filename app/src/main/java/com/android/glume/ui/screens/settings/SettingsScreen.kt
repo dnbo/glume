@@ -134,7 +134,10 @@ fun SettingsScreen(vm: SettingsViewModel = koinViewModel(), session: Session = k
             cats.forEachIndexed { i, k ->
                 ListRow(
                     onClick = { vm.focus.focus("row:$i:0") },
-                    modifier = Modifier.remembered(vm.focus, "cat:$i"),
+                    modifier = Modifier.remembered(vm.focus, "cat:$i").onKeyEvent { e ->
+                        // ▶ enters the category at its first row.
+                        if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionRight) vm.focus.focus("row:$i:0") else false
+                    },
                     selected = i == cat, minHeight = 76.dp,
                     onFocused = { cat = i },
                 ) {
