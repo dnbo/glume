@@ -85,8 +85,9 @@ fun SelectableRow(selected: Boolean, modifier: Modifier = Modifier, minHeight: D
 }
 
 private fun KeyEvent.isDown() = type == KeyEventType.KeyDown
-private fun KeyEvent.isOk() = key == Key.DirectionCenter || key == Key.Enter || key == Key.NumPadEnter
-private fun KeyEvent.isBack() = key == Key.Back || key == Key.Escape
+/** OK presses; auto-repeats of the hold that opened a modal are ignored. */
+private fun KeyEvent.isOk() = (key == Key.DirectionCenter || key == Key.Enter || key == Key.NumPadEnter) &&
+    nativeKeyEvent.repeatCount == 0 && !nativeKeyEvent.isLongPress
 
 /** Side panel opened by long-press OK (or ⓘ/M). Mirrors the design's St-ContextMenu board. */
 class ContextMenu(private val app: AppController, private val target: MenuTarget) : Modal {
@@ -129,9 +130,13 @@ class ContextMenu(private val app: AppController, private val target: MenuTarget
             event.key == Key.DirectionDown -> index = (index + 1).coerceAtMost(n - 1)
             event.key == Key.DirectionLeft && level == "album" -> { level = "main"; index = 1 }
             event.isOk() -> select()
-            event.isBack() -> if (level == "album") { level = "main"; index = 1 } else close()
+            event.key == Key.Escape -> onBack()
         }
         return true
+    }
+
+    override fun onBack() {
+        if (level == "album") { level = "main"; index = 1 } else close()
     }
 
     private fun select() {
@@ -276,7 +281,7 @@ class KeyboardDialog(
     override fun onKey(event: KeyEvent): Boolean {
         if (!event.isDown()) return true
         when {
-            event.isBack() -> app.modal = null
+            event.key == Key.Escape -> onBack()
             event.isOk() -> press(Kb.keyAt(r, c))
             event.key == Key.Backspace -> value = value.dropLast(1)
             Kb.step(r, c, event.key) != null -> Kb.step(r, c, event.key)!!.let { (nr, nc) -> r = nr; c = nc }
@@ -284,6 +289,8 @@ class KeyboardDialog(
         }
         return true
     }
+
+    override fun onBack() { app.modal = null }
 
     private fun press(key: String) {
         if (key == "done") { app.modal = null; onDone(value); return }

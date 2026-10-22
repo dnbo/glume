@@ -46,6 +46,7 @@ import com.android.glume.data.ImmichRepository
 import com.android.glume.data.SettingsStore
 import com.android.glume.data.mock.MockImmichRepository
 import com.android.glume.domain.ServerCheck
+import com.android.glume.ui.app.InterceptBack
 import com.android.glume.ui.app.KeyboardDialog
 import com.android.glume.ui.app.LocalApp
 import com.android.glume.ui.app.PulseDot
@@ -144,6 +145,8 @@ fun ConnectScreen(vm: ConnectViewModel = koinViewModel()) {
     LaunchedEffect(s.done) { if (s.done) app.goTop(ProfilesRoute) }
     LaunchedEffect(Unit) { runCatching { qrFr.requestFocus() } }
     LaunchedEffect(s.mode) { if (s.mode == ConnectMode.ERROR) runCatching { retryFr.requestFocus() } }
+
+    InterceptBack(s.mode == ConnectMode.ERROR) { vm.editAddress(); runCatching { urlFr.requestFocus() } }
 
     fun openKeyboard(label: String, value: String, secret: Boolean, next: FocusRequester, set: (String) -> Unit) {
         app.modal = KeyboardDialog(app, label, value, secret) { set(it); runCatching { next.requestFocus() } }

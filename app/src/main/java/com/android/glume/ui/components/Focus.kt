@@ -6,7 +6,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.BringIntoViewSpec
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -40,6 +40,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -76,7 +77,10 @@ fun FocusSurface(
 ) {
     val interaction = remember { MutableInteractionSource() }
     var focused by remember { mutableStateOf(false) }
-    val pressed by interaction.collectIsPressedAsState()
+    val touchPressed by interaction.collectIsPressedAsState()
+    var keyPressed by remember { mutableStateOf(false) }
+    var longFired by remember { mutableStateOf(false) }
+    val pressed = touchPressed || keyPressed
     val motion = Glume.motion
     val colors = Glume.colors
     val target = when {
@@ -96,14 +100,32 @@ fun FocusSurface(
             .onFocusChanged {
                 if (it.isFocused != focused) {
                     focused = it.isFocused
+                    keyPressed = false
                     if (it.isFocused) onFocused?.invoke()
                 }
             }
-            .combinedClickable(
+            // OK from the remote: press on down, long-press on the first auto-repeat (the remote's
+            // hold signal), click on up only if no long-press fired. Handled here rather than by
+            // clickable so a menu opening mid-press never leaves a stuck press state.
+            .onPreviewKeyEvent { e ->
+                if (!enabled || !e.isOkKey()) return@onPreviewKeyEvent false
+                when (e.type) {
+                    KeyEventType.KeyDown -> {
+                        val n = e.nativeKeyEvent
+                        if (n.repeatCount == 0 && !n.isLongPress) { keyPressed = true; longFired = false }
+                        else if (!longFired && onLongClick != null) { longFired = true; keyPressed = false; onLongClick() }
+                    }
+                    KeyEventType.KeyUp -> {
+                        if (keyPressed && !longFired) onClick()
+                        keyPressed = false
+                    }
+                }
+                true
+            }
+            .clickable(
                 interactionSource = interaction,
                 indication = null,
                 enabled = enabled,
-                onLongClick = onLongClick,
                 onClick = onClick,
             ),
     ) {
@@ -211,6 +233,9 @@ class PivotSpec(private val pivot: Float, private val band: Float = 0f) : BringI
 object NoScrollSpec : BringIntoViewSpec {
     override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float) = 0f
 }
+
+internal fun androidx.compose.ui.input.key.KeyEvent.isOkKey() =
+    key == Key.DirectionCenter || key == Key.Enter || key == Key.NumPadEnter
 
 /** Media play/pause key on a focused element (⏯ starts a slideshow from the focused item). */
 fun Modifier.onPlayPause(action: () -> Unit): Modifier = onKeyEvent {

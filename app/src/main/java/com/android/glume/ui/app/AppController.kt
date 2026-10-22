@@ -34,6 +34,9 @@ interface Modal {
     /** Return true if the key was handled. Called for every key while the modal is open. */
     fun onKey(event: KeyEvent): Boolean
 
+    /** System Back (delivered by the back dispatcher, not as a key event on targetSdk 36+). */
+    fun onBack()
+
     @Composable
     fun Content()
 }
@@ -79,6 +82,19 @@ class AppController(
     var holdRailFocus = false
 
     var lastInputAt = SystemClock.uptimeMillis()
+
+    /** Screen-level Back interceptors, newest last; each returns true if it handled Back. */
+    internal val backInterceptors = mutableListOf<() -> Boolean>()
+
+    /** What Back does when nothing intercepts it; set by the shell (rail logic, pop, exit). */
+    internal var rootBack: () -> Unit = {}
+
+    /** Back goes up exactly one level: modal, then screen state (zoom, panel…), then navigation. */
+    fun back() {
+        modal?.let { it.onBack(); return }
+        for (i in backInterceptors.indices.reversed()) if (backInterceptors[i]()) return
+        rootBack()
+    }
 
     private var toastSeq = 0L
 

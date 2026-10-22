@@ -1,6 +1,9 @@
 package com.android.glume.ui.app
 
 import android.os.SystemClock
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivity
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.draw.drawBehind
@@ -150,16 +153,9 @@ private fun AppShell(app: AppController, start: Any, prefs: Prefs, session: Sess
                 app.modal?.onKey(e) ?: false
             }
             .onKeyEvent { e ->
-                // Reached only when the focused element didn't handle the key.
-                if (e.key != Key.Back && e.key != Key.Escape) return@onKeyEvent false
-                if (section == null) return@onKeyEvent false
-                if (e.type == KeyEventType.KeyDown) {
-                    when {
-                        !app.railFocused -> app.focusRail()
-                        section != RailSection.Home -> { app.holdRailFocus = true; app.goTop(HomeRoute) }
-                        else -> app.toast("Press Home on the remote to leave Immich", Ic.info)
-                    }
-                }
+                // Escape on a USB keyboard behaves like the remote's Back.
+                if (e.key != Key.Escape) return@onKeyEvent false
+                if (e.type == KeyEventType.KeyDown) app.back()
                 true
             },
     ) {
@@ -201,6 +197,22 @@ private fun AppShell(app: AppController, start: Any, prefs: Prefs, session: Sess
         if (app.debugOverlay) DebugOverlay()
     }
 
+    // Back is delivered by the back dispatcher (predictive back on targetSdk 36+), never as a key
+    // event, so it is handled here in one place. NavHost's own handler is disabled so this one decides.
+    val activity = LocalActivity.current
+    LaunchedEffect(Unit) { nav.enableOnBackPressed(false) }
+    app.rootBack = {
+        when {
+            section != null && !app.railFocused -> app.focusRail()
+            section != null && section != RailSection.Home -> { app.holdRailFocus = true; app.goTop(HomeRoute) }
+            section == RailSection.Home -> app.toast("Press Home on the remote to leave Immich", Ic.info)
+            nav.previousBackStackEntry != null -> nav.popBackStack()
+            dest?.hasRoute(ProfilesRoute::class) == true && prefs.userId != null -> app.goTop(HomeRoute)
+            else -> activity?.moveTaskToBack(true)
+        }
+    }
+    BackHandler { app.back() }
+
     // Back from a section to Home lands on the rail, not the content.
     LaunchedEffect(entry) {
         if (app.holdRailFocus) {
@@ -228,6 +240,19 @@ private fun AppShell(app: AppController, start: Any, prefs: Prefs, session: Sess
 
 private fun screenEnter(): EnterTransition =
     fadeIn(tween(280, easing = GlumeMotion.Ease)) + slideInVertically(tween(280, easing = GlumeMotion.Ease)) { 14 }
+
+/** Lets a screen take Back while [enabled] (zoomed viewer, open panel, settings rows…). */
+@Composable
+fun InterceptBack(enabled: Boolean, onBack: () -> Unit) {
+    val app = LocalApp.current
+    val currentEnabled by rememberUpdatedState(enabled)
+    val currentOnBack by rememberUpdatedState(onBack)
+    DisposableEffect(app) {
+        val f: () -> Boolean = { if (currentEnabled) { currentOnBack(); true } else false }
+        app.backInterceptors.add(f)
+        onDispose { app.backInterceptors.remove(f) }
+    }
+}
 
 /**
  * Restores a screen's focus when it appears, unless Back is parking focus on the rail. Decided
