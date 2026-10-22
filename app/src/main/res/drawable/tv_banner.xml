@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 320x180 Android TV launcher banner: aperture mark on the app background. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp"
+    android:height="180dp"
+    android:viewportWidth="320"
+    android:viewportHeight="180">
+    <path
+        android:fillColor="#0A0C11"
+        android:pathData="M0,0h320v180h-320z" />
+    <path
+        android:fillColor="#4553D6"
+        android:pathData="M124,54h72a16,16 0 0 1 16,16v40a16,16 0 0 1 -16,16h-72a16,16 0 0 1 -16,-16v-40a16,16 0 0 1 16,-16z" />
+    <group
+        android:scaleX="2.6"
+        android:scaleY="2.6"
+        android:translateX="128.8"
+        android:translateY="58.8">
+        <path
+            android:pathData="M12,21a9,9 0 1,0 0,-18 9,9 0 0,0 0,18zM14.3,3.3 L8.5,13.5M20.6,9.5H9M17.7,19 L12,9M9.7,20.7l5.8,-10.2M3.4,14.5H15M6.3,5 L12,15"
+            android:strokeWidth="2"
+            android:strokeColor="#FFFFFF"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+    </group>
+</vector>
