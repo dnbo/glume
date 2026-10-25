@@ -19,6 +19,9 @@ import kotlinx.coroutines.flow.StateFlow
  * Everything the UI needs from an Immich server. The only implementation today is
  * [com.android.glume.data.mock.MockImmichRepository]; a Ktor-backed one will replace it once the
  * real server is reachable. Keep this interface free of HTTP/DTO types.
+ *
+ * Read-only client (see CLAUDE.md): the only writes allowed are [setFavorite] and [addToAlbum].
+ * Never add delete, trash, archive, edit, album create/remove or upload methods here.
  */
 interface ImmichRepository {
 
