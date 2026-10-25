@@ -4,7 +4,8 @@
 
 - **DI: Koin** (`di/AppModule.kt`). Less ceremony than Hilt for a single-module app, no annotation processing.
 - **Navigation: Compose Navigation with type-safe routes** (`ui/nav/Routes.kt`). Asset lists for the viewer and slideshow are not serialized into routes; they are parked in `MediaQueue` and the route carries a token.
-- **API layer: not built yet.** The real server wasn't reachable, so `MockImmichRepository` serves the design prototype's demo library from bundled sample photos. Everything goes through `ImmichRepository`, so a Ktor + kotlinx.serialization implementation (verified against the server's OpenAPI spec) can replace it in `AppModule` without UI changes.
+- **Sign-in: phone pairing + limited key.** The TV serves a one-time sign-in page on the LAN (QR link, 10 min, single use). Email + password go to Immich once; the TV creates its own API key with 17 read permissions plus `asset.update` (favorites) and `albumAsset.create` (add to album), revokes its previous key for that account, logs the session out, and stores only the key, encrypted with an Android Keystore AES-GCM key. Verified live on demo.immich.app (Immich 3.3): a delete with the key is refused (403). The on-TV form uses the same path. Multiple users each pair once; Profiles lists the accounts on this TV.
+- **API layer (library): not built yet.** The real server wasn't reachable, so `MockImmichRepository` serves the design prototype's demo library from bundled sample photos. Everything goes through `ImmichRepository`, so a Ktor + kotlinx.serialization implementation (verified against the server's OpenAPI spec) can replace it in `AppModule` without UI changes.
 - **Timeline: custom windowed loader**, not Paging 3. The bucket index (month + count) loads first, so the scrubber can jump anywhere and every month has stable, correctly sized placeholders. Each month's assets load when its header or tiles compose. This maps directly onto Immich's time-bucket endpoints.
 - **Settings: DataStore Preferences.** Only the server URL and selected user are stored. No credentials exist in demo mode; the Keystore-backed secret storage lands with the real API layer.
 
@@ -33,7 +34,7 @@ Where the design was ambiguous or too costly, I made the simplest TV-appropriate
 2. **Blurred backdrops** (ambient, viewer, connect/profiles). CSS `blur(60–90px)` is replaced by a stretched ThumbHash.
 3. **Low-res → sharp transition** (St-Slow). Coil's 300 ms crossfade from the ThumbHash replaces the animated 16 → 0 px blur, since animated blur is explicitly ruled out.
 4. **Rail open/close.** Labels appear instantly and only the background gradient animates (no width animation of the item column).
-5. **QR pairing.** It's a demo-mode simulation (scan → approve → signed in). Real pairing needs a server-side flow that Immich doesn't offer yet, so the static QR is the design's placeholder.
+5. **QR pairing.** Immich has no "approve on the phone app" flow, so the QR opens a sign-in page served by the TV instead; the card copy says "sign in on your phone". Plain HTTP on the LAN (no trusted certificate is possible), mitigated by a one-time, 10-minute, 144-bit link.
 6. **Live Photos** show the LIVE badge, but ⏯ doesn't play the motion part yet; it needs the linked video asset from the API.
 7. **Video controls** use a real Media3 player streaming a public sample clip. Demo videos all play the same clip, and durations on tiles come from mock data.
 8. **Unnamed faces** in the design are hue-shifted avatars; here they're plain avatars.

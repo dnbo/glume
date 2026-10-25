@@ -41,11 +41,18 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
-import coil3.compose.AsyncImage
+import androidx.compose.runtime.DisposableEffect
+import com.android.glume.BuildConfig
 import com.android.glume.data.ImmichRepository
+import com.android.glume.data.auth.ServerUrl
+import com.android.glume.data.auth.SignInError
+import com.android.glume.data.auth.SignInResult
+import com.android.glume.data.auth.SignInService
+import com.android.glume.data.pairing.PairingServer
+import com.android.glume.data.pairing.PairingState
+import com.android.glume.ui.components.QrCode
+import com.android.glume.ui.nav.HomeRoute
 import com.android.glume.data.SettingsStore
-import com.android.glume.data.mock.MockImmichRepository
-import com.android.glume.domain.ServerCheck
 import com.android.glume.ui.app.InterceptBack
 import com.android.glume.ui.app.KeyboardDialog
 import com.android.glume.ui.app.LocalApp
@@ -59,11 +66,9 @@ import com.android.glume.ui.components.PillButton
 import com.android.glume.ui.components.T
 import com.android.glume.ui.components.drawPlaceholder
 import com.android.glume.ui.components.rememberThumbHash
-import com.android.glume.ui.nav.ProfilesRoute
 import com.android.glume.ui.theme.FocusScale
 import com.android.glume.ui.theme.Glume
 import com.android.glume.ui.theme.GlumeType
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -71,30 +76,39 @@ import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 
 enum class ConnectMode { FORM, CONNECTING, ERROR }
-enum class QrState { WAIT, SCANNED, APPROVED }
 
 data class ConnectState(
+    // Debug builds prefill the public Immich demo so the flow can be tried without a server.
+    val url: String = if (BuildConfig.DEBUG) "https://demo.immich.app" else "",
+    val email: String = if (BuildConfig.DEBUG) "demo@immich.app" else "",
+    val password: String = if (BuildConfig.DEBUG) "demo" else "",
     val mode: ConnectMode = ConnectMode.FORM,
-    val url: String = MockImmichRepository.DEMO_URL,
-    val email: String = MockImmichRepository.DEMO_EMAIL,
-    val password: String = MockImmichRepository.DEMO_PASSWORD,
-    val qr: QrState = QrState.WAIT,
+    val errorTitle: String = "",
     val error: String = "",
     val backdropHash: String? = null,
     val done: Boolean = false,
 ) {
-    val host get() = url.removePrefix("https://").removePrefix("http://")
+    val host get() = ServerUrl.host(ServerUrl.normalize(url))
 }
 
-class ConnectViewModel(private val repo: ImmichRepository, private val settings: SettingsStore) : ViewModel() {
+class ConnectViewModel(
+    private val repo: ImmichRepository,
+    private val signIn: SignInService,
+    val pairing: PairingServer,
+    private val settings: SettingsStore,
+) : ViewModel() {
     private val _s = MutableStateFlow(ConnectState())
     val state = _s.asStateFlow()
 
     init {
-        // Demo only: there is no library to borrow a backdrop from before signing in to a real server.
+        // Demo library only: borrow a backdrop photo. A real server has nothing to show before sign-in.
         if (repo.isDemo) viewModelScope.launch {
             val hash = repo.memories().firstOrNull()?.assets?.firstOrNull()?.thumbhash
             _s.update { it.copy(backdropHash = hash) }
+        }
+        // A sign-in finished on the phone.
+        viewModelScope.launch {
+            pairing.state.collect { st -> if (st is PairingState.SignedIn) finish(st.account.id) }
         }
     }
 
@@ -103,30 +117,28 @@ class ConnectViewModel(private val repo: ImmichRepository, private val settings:
     fun setPassword(v: String) = _s.update { it.copy(password = v) }
     fun editAddress() = _s.update { it.copy(mode = ConnectMode.FORM) }
 
+    /** Sign in with the on-TV form: same login -> limited key -> logout swap as the phone page. */
     fun connect() {
         if (_s.value.mode == ConnectMode.CONNECTING) return
         _s.update { it.copy(mode = ConnectMode.CONNECTING) }
         viewModelScope.launch {
             val s = _s.value
-            when (val r = repo.connect(s.url, s.email, s.password)) {
-                ServerCheck.Ok -> { settings.signIn(s.url.trim().removeSuffix("/")); _s.update { it.copy(mode = ConnectMode.FORM, done = true) } }
-                is ServerCheck.Unreachable -> _s.update { it.copy(mode = ConnectMode.ERROR, error = r.reason) }
-                ServerCheck.InvalidCredentials -> _s.update { it.copy(mode = ConnectMode.ERROR, error = "Email or password is incorrect") }
+            when (val r = signIn.signIn(s.url, s.email, s.password)) {
+                is SignInResult.Success -> finish(r.account.id)
+                is SignInResult.Failed -> _s.update {
+                    it.copy(
+                        mode = ConnectMode.ERROR,
+                        errorTitle = if (r.reason == SignInError.Unreachable) "Can't reach server" else "Couldn't sign in",
+                        error = r.reason.message,
+                    )
+                }
             }
         }
     }
 
-    /** QR pairing. Demo mode simulates the phone scanning and approving. */
-    fun pairWithPhone() {
-        if (_s.value.qr != QrState.WAIT) return
-        viewModelScope.launch {
-            _s.update { it.copy(qr = QrState.SCANNED) }
-            delay(1000)
-            _s.update { it.copy(qr = QrState.APPROVED) }
-            delay(900)
-            settings.signIn(MockImmichRepository.DEMO_URL)
-            _s.update { it.copy(qr = QrState.WAIT, done = true) }
-        }
+    private suspend fun finish(accountId: String) {
+        settings.selectUser(accountId)
+        _s.update { it.copy(mode = ConnectMode.FORM, done = true) }
     }
 }
 
@@ -142,7 +154,13 @@ fun ConnectScreen(vm: ConnectViewModel = koinViewModel()) {
     val goFr = remember { FocusRequester() }
     val retryFr = remember { FocusRequester() }
 
-    LaunchedEffect(s.done) { if (s.done) app.goTop(ProfilesRoute) }
+    LaunchedEffect(s.done) { if (s.done) app.goTop(HomeRoute) }
+    val pairing by vm.pairing.state.collectAsStateWithLifecycle()
+    // The phone page is only served while this screen is visible.
+    DisposableEffect(Unit) {
+        vm.pairing.restart()
+        onDispose { vm.pairing.stop() }
+    }
     LaunchedEffect(Unit) { runCatching { qrFr.requestFocus() } }
     LaunchedEffect(s.mode) { if (s.mode == ConnectMode.ERROR) runCatching { retryFr.requestFocus() } }
 
@@ -169,7 +187,7 @@ fun ConnectScreen(vm: ConnectViewModel = koinViewModel()) {
                     T("Sign in once and this TV remembers you. Your photos stay on your own server.", GlumeType.body, color = c.text2, maxLines = 2, modifier = Modifier.widthIn(max = 760.dp))
                 }
                 FocusSurface(
-                    onClick = vm::pairWithPhone,
+                    onClick = { if (pairing is PairingState.Failed || pairing is PairingState.NoNetwork) vm.pairing.restart() },
                     modifier = Modifier.fillMaxWidth().focusRequester(qrFr).focusProperties { right = if (s.mode == ConnectMode.ERROR) retryFr else urlFr },
                     shape = RoundedCornerShape(28.dp),
                     focusScale = FocusScale.LARGE,
@@ -177,32 +195,27 @@ fun ConnectScreen(vm: ConnectViewModel = koinViewModel()) {
                     border = BorderStroke(2.dp, c.line),
                 ) {
                     Row(Modifier.padding(36.dp), horizontalArrangement = Arrangement.spacedBy(44.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(300.dp).clip(RoundedCornerShape(18.dp)).background(Color.White).padding(18.dp)) {
-                            AsyncImage(MockImmichRepository.QR_URL, "QR code for phone pairing", Modifier.fillMaxSize(), contentScale = ContentScale.Fit, filterQuality = FilterQuality.None)
+                        Box(Modifier.size(300.dp).clip(RoundedCornerShape(18.dp)).background(Color.White).padding(18.dp), contentAlignment = Alignment.Center) {
+                            val url = pairing.url()
+                            if (url != null) QrCode(url, Modifier.fillMaxSize())
+                            else GIcon(if (pairing is PairingState.NoNetwork) Ic.cloudOff else Ic.refresh, 64.dp, tint = Color(0xFF858DA0))
                         }
-                        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Label("Recommended")
-                            T("Scan with your phone", GlumeType.h2, maxLines = 2)
-                            T("Point your phone camera at the code and approve the sign-in in the Immich app. No typing on the TV.", GlumeType.sec.copy(fontSize = 24.sp), color = c.text2, maxLines = 5)
-                            Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                                T("Pairing code", GlumeType.sec, color = c.text2)
-                                T("K7F-29Q", GlumeType.title.copy(letterSpacing = 0.14.em), tabular = true)
+                            T("Scan with your phone", GlumeType.title, maxLines = 1)
+                            T(
+                                if (pairing is PairingState.NoNetwork) "This TV isn't on a network your phone can reach. Use the form instead."
+                                else "Point your phone camera at the code and sign in on your phone. No typing on the TV.",
+                                GlumeType.sec.copy(fontSize = 24.sp), color = c.text2, maxLines = 3,
+                            )
+                            pairing.code()?.let { code ->
+                                Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                                    T("Pairing code", GlumeType.sec, color = c.text2)
+                                    T(code, GlumeType.title.copy(letterSpacing = 0.14.em), tabular = true)
+                                }
                             }
-                            val approved = s.qr == QrState.APPROVED
-                            Row(
-                                Modifier.clip(RoundedCornerShape(999.dp)).background(if (approved) Color(0x297FE0B0) else Color(0x297C8CFF)).padding(horizontal = 18.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                PulseDot(if (approved) c.ok else c.accent, pulse = !approved)
-                                T(
-                                    when (s.qr) {
-                                        QrState.WAIT -> "Waiting for your phone…"
-                                        QrState.SCANNED -> "Scanned · approve on your phone"
-                                        QrState.APPROVED -> "Approved on your phone"
-                                    },
-                                    GlumeType.badge,
-                                )
-                            }
+                            PairingStatus(pairing)
+                            pairing.url()?.let { T(it.substringBefore("/p/"), GlumeType.sec, color = c.text3) }
                         }
                     }
                 }
@@ -236,8 +249,8 @@ fun ConnectScreen(vm: ConnectViewModel = koinViewModel()) {
                         Box(Modifier.size(88.dp).clip(RoundedCornerShape(24.dp)).background(Color(0x24FF8A7A)), contentAlignment = Alignment.Center) {
                             GIcon(Ic.cloudOff, 48.dp, tint = c.danger)
                         }
-                        T("Can't reach server", GlumeType.h1)
-                        T("We couldn't connect to ${s.host}. Check the address and that this TV is on the same network as your server.", GlumeType.body, color = c.text2, maxLines = 3)
+                        T(s.errorTitle, GlumeType.h1)
+                        T(s.error, GlumeType.body, color = c.text2, maxLines = 3)
                         Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                             PillButton("Retry", vm::connect, Modifier.focusRequester(retryFr).focusProperties { left = qrFr }, icon = Ic.refresh, primary = true)
                             PillButton("Edit address", {
@@ -245,7 +258,7 @@ fun ConnectScreen(vm: ConnectViewModel = koinViewModel()) {
                                 app.modal = KeyboardDialog(app, "Server URL", s.url, false) { vm.setUrl(it); runCatching { emailFr.requestFocus() } }
                             })
                         }
-                        T(s.error, GlumeType.sec, color = c.text2)
+                        T(s.host, GlumeType.sec, color = c.text2)
                     }
                 }
             }
@@ -262,5 +275,42 @@ private fun IndeterminateBar() {
             Modifier.fillMaxWidth(0.33f).height(6.dp).graphicsLayer { translationX = size.width * x }
                 .clip(RoundedCornerShape(3.dp)).background(Glume.colors.accent),
         )
+    }
+}
+
+private fun PairingState.url(): String? = when (this) {
+    is PairingState.Waiting -> url
+    is PairingState.PhoneConnected -> url
+    is PairingState.SigningIn -> url
+    is PairingState.Failed -> url
+    else -> null
+}
+
+private fun PairingState.code(): String? = when (this) {
+    is PairingState.Waiting -> code
+    is PairingState.PhoneConnected -> code
+    is PairingState.SigningIn -> code
+    is PairingState.Failed -> code
+    else -> null
+}
+
+@Composable
+private fun PairingStatus(state: PairingState) {
+    val c = Glume.colors
+    val (text, color, pulse) = when (state) {
+        PairingState.Starting -> Triple("Preparing a code…", c.accent, true)
+        is PairingState.Waiting -> Triple("Waiting for your phone…", c.accent, true)
+        is PairingState.PhoneConnected -> Triple("Phone connected · sign in there", c.accent, true)
+        is PairingState.SigningIn -> Triple("Signing in…", c.accent, true)
+        is PairingState.SignedIn -> Triple("Signed in as ${state.account.name}", c.ok, false)
+        is PairingState.Failed -> Triple(state.message, c.danger, false)
+        PairingState.NoNetwork -> Triple("No network · press OK to retry", c.danger, false)
+    }
+    Row(
+        Modifier.clip(RoundedCornerShape(999.dp)).background(color.copy(alpha = 0.16f)).padding(horizontal = 18.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        PulseDot(color, pulse = pulse)
+        T(text, GlumeType.badge, maxLines = 2)
     }
 }

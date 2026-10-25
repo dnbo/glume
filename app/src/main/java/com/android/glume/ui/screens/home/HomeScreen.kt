@@ -55,6 +55,7 @@ import com.android.glume.ui.app.LocalApp
 import com.android.glume.ui.app.MenuTarget
 import com.android.glume.ui.components.AlbumCard
 import com.android.glume.ui.components.Avatar
+import com.android.glume.ui.components.immichAvatarColor
 import com.android.glume.ui.components.ContinueCard
 import com.android.glume.ui.components.Ic
 import com.android.glume.ui.components.MemoryCard
@@ -231,7 +232,7 @@ private fun Greeting(user: User, modifier: Modifier) {
         T(Format.greeting(user.name), GlumeType.title, color = c.text2, modifier = Modifier.weight(1f))
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
             T(clock, GlumeType.title, tabular = true)
-            Avatar(user.avatarUrl, 52.dp)
+            Avatar(user.avatarUrl, 52.dp, name = user.name, color = immichAvatarColor(user.avatarColor))
         }
     }
 }

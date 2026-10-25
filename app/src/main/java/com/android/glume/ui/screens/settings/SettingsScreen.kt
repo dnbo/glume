@@ -37,6 +37,9 @@ import com.android.glume.data.ImmichRepository
 import com.android.glume.data.Prefs
 import com.android.glume.data.SettingKey
 import com.android.glume.data.SettingsStore
+import com.android.glume.data.auth.Account
+import com.android.glume.data.auth.AccountStore
+import com.android.glume.data.auth.ServerUrl
 import com.android.glume.domain.ServerInfo
 import com.android.glume.ui.app.AppController
 import androidx.compose.runtime.mutableStateOf
@@ -69,7 +72,7 @@ import kotlinx.coroutines.withContext
 import org.koin.compose.koinInject
 import org.koin.androidx.compose.koinViewModel
 
-class SettingsViewModel(private val repo: ImmichRepository, private val settings: SettingsStore, private val context: Context) : ViewModel() {
+class SettingsViewModel(private val repo: ImmichRepository, private val settings: SettingsStore, private val accounts: AccountStore, private val context: Context) : ViewModel() {
     val focus = FocusMemory()
     private val _server = MutableStateFlow<ServerInfo?>(null)
     val server = _server.asStateFlow()
@@ -98,7 +101,12 @@ class SettingsViewModel(private val repo: ImmichRepository, private val settings
         then(freed)
     }
 
-    fun signOut(then: () -> Unit) = viewModelScope.launch { settings.signOut(); then() }
+    /** Forgets this account on the TV; returns whether other accounts remain. */
+    fun signOut(account: Account?, then: (othersLeft: Boolean) -> Unit) = viewModelScope.launch {
+        if (account != null) accounts.remove(account.id)
+        settings.clearUser()
+        then(accounts.accounts.value.orEmpty().any { it.id != account?.id })
+    }
 }
 
 /** One row on the right: either a [SettingKey] (toggle/cycle) or a fixed info/action row. */
@@ -123,10 +131,11 @@ fun SettingsScreen(vm: SettingsViewModel = koinViewModel(), session: Session = k
     val server by vm.server.collectAsStateWithLifecycle()
     val cache by vm.cacheBytes.collectAsStateWithLifecycle()
     val user by session.user.collectAsStateWithLifecycle()
+    val account by session.account.collectAsStateWithLifecycle()
     val c = Glume.colors
     var cat by remember { mutableIntStateOf(0) }
     var rowsFocused by remember { mutableStateOf(false) }
-    val cats = categories(app, vm, prefs, server, cache, user?.name ?: "", user?.email ?: "")
+    val cats = categories(app, vm, prefs, server, cache, account)
 
     Box(Modifier.fillMaxSize()) {
         T("Settings", GlumeType.h1, Modifier.offset(x = Dims.CONTENT_LEFT.dp, y = Dims.SAFE_Y.dp))
@@ -208,20 +217,23 @@ private fun SettingRow(row: Row_, prefs: Prefs, vm: SettingsViewModel, modifier:
     }
 }
 
-private fun categories(app: AppController, vm: SettingsViewModel, p: Prefs, server: ServerInfo?, cache: Long, userName: String, email: String): List<Category> {
-    val host = p.serverUrl.orEmpty().removePrefix("https://").removePrefix("http://")
+private fun categories(app: AppController, vm: SettingsViewModel, p: Prefs, server: ServerInfo?, cache: Long, account: Account?): List<Category> {
+    val host = account?.let { ServerUrl.host(it.serverUrl) }.orEmpty()
     val storage = server?.let { "%.2f of %d TB".format(it.usedBytes / 1e12, it.totalBytes / 1_000_000_000_000L) } ?: "…"
     return listOf(
         Category("Server", Ic.server, listOf(
             Row_.Info("Server address", host),
-            Row_.Info("Status", if (p.simulateOffline) "Unreachable" else "Connected · ${server?.latencyMs ?: 0} ms", warn = p.simulateOffline),
+            Row_.Info("Status", if (p.simulateOffline) "Unreachable" else "Signed in", warn = p.simulateOffline),
+            Row_.Info("Access", "Read-only key", "Can view, favorite and add to albums · can't delete or upload"),
             Row_.Storage("Storage", storage, server?.let { it.usedBytes.toFloat() / it.totalBytes } ?: 0f, server?.let { "%,d photos · %,d videos".format(it.photos, it.videos) }),
             Row_.Setting(SettingKey.SimulateOffline, "Simulate server unreachable", "Demo only · shows the offline state"),
-        ) + if (app.repo.isDemo) listOf(Row_.Info("Library", "Demo data", "No server needed; swap in the real repository later")) else emptyList()),
+        ) + if (app.repo.isDemo) listOf(Row_.Info("Library", "Demo data", "Photos are sample data until the real library is connected")) else emptyList()),
         Category("Account", Ic.user, listOf(
-            Row_.Info("Signed in as", userName, email),
+            Row_.Info("Signed in as", account?.name.orEmpty(), account?.email),
             Row_.Action("Switch user") { app.goTop(ProfilesRoute) },
-            Row_.Action("Sign out", "You will need to pair this TV again") { vm.signOut { app.goTop(ConnectRoute) } },
+            Row_.Action("Sign out", "Forgets this account on the TV · revoke its key in Immich › Account Settings › API Keys") {
+                vm.signOut(account) { others -> app.goTop(if (others) ProfilesRoute else ConnectRoute) }
+            },
         )),
         Category("Slideshow", Ic.play, listOf(
             Row_.Setting(SettingKey.SlideSource, "Show photos from"),

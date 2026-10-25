@@ -16,11 +16,11 @@ import kotlinx.coroutines.flow.stateIn
 
 private val Context.dataStore by preferencesDataStore(name = "settings")
 
-/** User settings and session. Secrets are never stored here (demo mode has none to store). */
+/** User settings and the selected account. Secrets live encrypted in AccountStore, never here. */
 @Immutable
 data class Prefs(
     val loaded: Boolean = false,
-    val serverUrl: String? = null,
+    /** Selected account (see AccountStore). */
     val userId: String? = null,
     // Slideshow
     val slideSource: String = "Favorites",
@@ -47,7 +47,6 @@ data class Prefs(
     // Demo-only switches
     val simulateOffline: Boolean = false,
 ) {
-    val signedIn get() = serverUrl != null
     val saverAfterMs: Long get() = SAVER_MS[saverAfter] ?: 300_000L
 
     companion object {
@@ -58,7 +57,6 @@ data class Prefs(
 class SettingsStore(private val context: Context, scope: CoroutineScope) {
 
     private object K {
-        val server = stringPreferencesKey("server_url")
         val user = stringPreferencesKey("user_id")
         val slideSource = stringPreferencesKey("slide_source")
         val shuffle = booleanPreferencesKey("shuffle")
@@ -87,7 +85,6 @@ class SettingsStore(private val context: Context, scope: CoroutineScope) {
         val d = Prefs()
         return Prefs(
             loaded = true,
-            serverUrl = this[K.server],
             userId = this[K.user],
             slideSource = this[K.slideSource] ?: d.slideSource,
             shuffle = this[K.shuffle] ?: d.shuffle,
@@ -110,9 +107,8 @@ class SettingsStore(private val context: Context, scope: CoroutineScope) {
         )
     }
 
-    suspend fun signIn(serverUrl: String) = context.dataStore.edit { it[K.server] = serverUrl; it.remove(K.user) }
     suspend fun selectUser(id: String) = context.dataStore.edit { it[K.user] = id }
-    suspend fun signOut() = context.dataStore.edit { it.remove(K.server); it.remove(K.user) }
+    suspend fun clearUser() = context.dataStore.edit { it.remove(K.user) }
 
     /** Generic setter used by Settings and the slideshow panel; [key] is a [SettingKey]. */
     suspend fun set(key: SettingKey, value: Any) = context.dataStore.edit {

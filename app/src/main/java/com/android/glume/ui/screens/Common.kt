@@ -18,8 +18,11 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.android.glume.data.ImmichRepository
 import com.android.glume.data.SettingsStore
+import com.android.glume.data.auth.Account
+import com.android.glume.data.auth.AccountStore
+import com.android.glume.data.auth.ServerUrl
+import kotlinx.coroutines.flow.combine
 import com.android.glume.domain.User
 import com.android.glume.ui.components.FocusMemory
 import com.android.glume.ui.components.GIcon
@@ -63,12 +66,14 @@ abstract class LoadViewModel<T> : ViewModel() {
     }
 }
 
-/** The signed-in Immich user, resolved from the saved user id. */
-class Session(repo: ImmichRepository, settings: SettingsStore, scope: CoroutineScope) {
-    val user: StateFlow<User?> = settings.prefs
-        .map { it.userId }
-        .distinctUntilChanged()
-        .map { id -> id?.let { repo.user(it) } }
+/** The selected account on this TV, and the same as a UI [User]. */
+class Session(accounts: AccountStore, settings: SettingsStore, scope: CoroutineScope) {
+    val account: StateFlow<Account?> = combine(accounts.accounts, settings.prefs) { list, p ->
+        list?.firstOrNull { it.id == p.userId }
+    }.distinctUntilChanged().stateIn(scope, SharingStarted.Eagerly, null)
+
+    val user: StateFlow<User?> = account
+        .map { a -> a?.let { User(it.id, it.name, it.email, avatarUrl = null, role = ServerUrl.host(it.serverUrl), avatarColor = it.avatarColor) } }
         .stateIn(scope, SharingStarted.Eagerly, null)
 }
 

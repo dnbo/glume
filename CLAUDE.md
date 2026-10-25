@@ -79,6 +79,8 @@ Phase 6, Settings and polish
 The app must never be able to remove or alter photos on my server.
 - Allowed writes, and only these: favorite/unfavorite an asset, and add an existing asset to an existing album.
 - Never call delete, trash, restore, archive, hide, edit/metadata-update, album-create/delete/rename, remove-from-album, upload, or any admin endpoint. Don't add such methods to `ImmichRepository`, even unused.
+- Sign-in exception: during sign-in only, the password session may create the TV's limited API key and revoke this TV's own previous key for the same account, then must log out. Passwords and session tokens are never stored.
+- Note: Immich has no favorite-only permission; favorites need `asset.update`, which the server would also accept for metadata edits/archiving. The app's code is the guard for those.
 - The API key should carry only read permissions plus the two writes above (exact permission names: verify against my server's OpenAPI spec). If the server rejects a write for lack of permission, show a toast; never ask for broader permissions.
 - UI actions that would need a forbidden write (e.g. "New album…", "Hide this memory") stay as a toast pointing to the Immich app, or are removed.
 

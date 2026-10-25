@@ -46,6 +46,8 @@ data class User(
     /** "Owner", "Partner", … */
     val role: String,
     val libraryEmpty: Boolean = false,
+    /** Immich avatar color name, used when there is no profile picture. */
+    val avatarColor: String = "primary",
 )
 
 @Immutable
@@ -153,8 +155,3 @@ data class ServerInfo(
 @Immutable
 data class SearchFilter(val name: String, val icon: String, val options: List<String>)
 
-sealed interface ServerCheck {
-    data object Ok : ServerCheck
-    data class Unreachable(val host: String, val reason: String) : ServerCheck
-    data object InvalidCredentials : ServerCheck
-}

@@ -241,10 +241,30 @@ fun Badge(text: String, modifier: Modifier = Modifier, pill: Boolean = false, ic
 
 private fun Float.em() = androidx.compose.ui.unit.TextUnit(this, androidx.compose.ui.unit.TextUnitType.Em)
 
-/** Round avatar. */
+/** Round avatar. Without a [url], shows [name]'s initial on [color] (Immich's avatar color). */
 @Composable
-fun Avatar(url: String?, size: Dp, modifier: Modifier = Modifier) {
+fun Avatar(url: String?, size: Dp, modifier: Modifier = Modifier, name: String? = null, color: Color? = null) {
+    if (url == null && name != null) {
+        Box(modifier.size(size).clip(CircleShape).background(color ?: Glume.colors.accentStrong), contentAlignment = Alignment.Center) {
+            T(name.take(1).uppercase(), GlumeType.body.copy(fontSize = (size.value * 0.45f).sp, fontWeight = FontWeight.Bold), color = Color.White)
+        }
+        return
+    }
     UrlImage(url, modifier.size(size).clip(CircleShape))
+}
+
+/** Immich's named avatar colors. */
+fun immichAvatarColor(name: String): Color = when (name) {
+    "pink" -> Color(0xFFDE7FB3)
+    "red" -> Color(0xFFD95C5C)
+    "yellow" -> Color(0xFFC9A227)
+    "blue" -> Color(0xFF4A90D9)
+    "green" -> Color(0xFF3FA66B)
+    "purple" -> Color(0xFF9B6BD9)
+    "orange" -> Color(0xFFE08A3C)
+    "gray" -> Color(0xFF7A8090)
+    "amber" -> Color(0xFFD9A13C)
+    else -> Color(0xFF4553D6)
 }
 
 /** Connect-form field: label over value, 108 px, radius 18. Focus = ring + 1.03. */

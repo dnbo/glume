@@ -3,6 +3,9 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Find the TV's LAN address for the phone sign-in link. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Cleartext is allowed because many self-hosted Immich servers run on plain HTTP on the LAN. -->
 
     <!-- TV app: leanback required on TV, but not on other devices so the phone emulator can be used for quick checks. -->
     <uses-feature
@@ -26,6 +29,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Glume"
+        android:usesCleartextTraffic="true"
         tools:targetApi="37">
 
         <activity

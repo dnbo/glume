@@ -2,6 +2,10 @@ package com.android.glume.di
 
 import com.android.glume.data.ImmichRepository
 import com.android.glume.data.SettingsStore
+import com.android.glume.data.api.ImmichAuthApi
+import com.android.glume.data.auth.AccountStore
+import com.android.glume.data.auth.SignInService
+import com.android.glume.data.pairing.PairingServer
 import com.android.glume.data.mock.MockImmichRepository
 import com.android.glume.ui.screens.Session
 import com.android.glume.ui.screens.albums.AlbumsViewModel
@@ -31,9 +35,13 @@ val appModule = module {
     single<ImmichRepository> { MockImmichRepository(androidContext()) }
     single { SettingsStore(androidContext(), get()) }
     single { Session(get(), get(), get()) }
+    single { AccountStore(androidContext(), get()) }
+    single { ImmichAuthApi() }
+    single { val store = get<AccountStore>(); SignInService(get(), { a, k -> store.add(a, k) }, android.os.Build.MODEL, { id -> store.accounts.value?.firstOrNull { it.id == id }?.apiKeyId }) }
+    single { PairingServer(androidContext(), get(), get()) }
 
-    viewModel { ConnectViewModel(get(), get()) }
-    viewModel { ProfilesViewModel(get(), get()) }
+    viewModel { ConnectViewModel(get(), get(), get(), get()) }
+    viewModel { ProfilesViewModel(get(), get(), get()) }
     viewModel { HomeViewModel(get(), get()) }
     viewModel { TimelineViewModel(get()) }
     viewModel { AlbumsViewModel(get()) }
@@ -41,5 +49,5 @@ val appModule = module {
     viewModel { PlacesViewModel(get()) }
     viewModel { (source: CollectionSource) -> CollectionViewModel(source, get()) }
     viewModel { SearchViewModel(get()) }
-    viewModel { SettingsViewModel(get(), get(), androidContext()) }
+    viewModel { SettingsViewModel(get(), get(), get(), androidContext()) }
 }

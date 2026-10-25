@@ -36,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.android.glume.domain.User
 import com.android.glume.ui.components.Avatar
+import com.android.glume.ui.components.immichAvatarColor
 import com.android.glume.ui.components.FocusSurface
 import com.android.glume.ui.components.GIcon
 import com.android.glume.ui.components.Ic
@@ -115,7 +116,7 @@ fun Rail(current: RailSection, user: User?, host: String, app: AppController) {
             }
         }
         Row(Modifier.align(Alignment.BottomStart).padding(start = 88.dp, bottom = 54.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-            Avatar(user?.avatarUrl, 56.dp)
+            Avatar(user?.avatarUrl, 56.dp, name = user?.name, color = user?.let { immichAvatarColor(it.avatarColor) })
             if (open && user != null) {
                 Column {
                     T(user.name, GlumeType.body.copy(fontWeight = FontWeight(650)))

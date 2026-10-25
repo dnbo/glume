@@ -44,6 +44,7 @@ import androidx.navigation.toRoute
 import com.android.glume.data.ImmichRepository
 import com.android.glume.data.Prefs
 import com.android.glume.data.SettingsStore
+import com.android.glume.data.auth.AccountStore
 import com.android.glume.ui.components.Ic
 import com.android.glume.ui.components.AmbientBackdrop
 import com.android.glume.ui.components.FocusMemory
@@ -93,9 +94,11 @@ fun GlumeRoot(
     settings: SettingsStore = koinInject(),
     repo: ImmichRepository = koinInject(),
     session: Session = koinInject(),
+    accountStore: AccountStore = koinInject(),
 ) {
     val prefs by settings.prefs.collectAsStateWithLifecycle()
-    if (!prefs.loaded) {
+    val accounts by accountStore.accounts.collectAsStateWithLifecycle()
+    if (!prefs.loaded || accounts == null) {
         Box(Modifier.fillMaxSize().background(Color(0xFF0A0C11)))
         return
     }
@@ -105,8 +108,8 @@ fun GlumeRoot(
         val app = remember { AppController(nav, repo, settings, scope) }
         val start: Any = remember {
             when {
-                !prefs.signedIn -> ConnectRoute
-                prefs.userId == null -> ProfilesRoute
+                accounts.isNullOrEmpty() -> ConnectRoute
+                accounts!!.none { it.id == prefs.userId } -> ProfilesRoute
                 else -> HomeRoute
             }
         }
@@ -189,7 +192,7 @@ private fun AppShell(app: AppController, start: Any, prefs: Prefs, session: Sess
             }
         }
         if (section != null) {
-            Rail(section, user, prefs.serverUrl.orEmpty().removePrefix("https://").removePrefix("http://"), app)
+            Rail(section, user, user?.role.orEmpty(), app)
         }
         if (prefs.simulateOffline && !dest.isFullScreen() && !dest.isSignedOut()) OfflineBanner()
         app.modal?.Content()

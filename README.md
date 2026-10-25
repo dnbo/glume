@@ -33,8 +33,9 @@ adb shell am start -n com.android.glume/.MainActivity
 
 ## Demo walkthrough
 
-- **Connect:** press OK on the QR card (pairing is simulated), or use the prefilled form with *Connect*. Any other server address shows the "Can't reach server" state.
-- **Profiles:** *Alex* has the full library and *Guest* has an empty one.
+- **Connect:** scan the QR with your phone and sign in there, or use the on-TV form. Debug builds prefill the public demo (`https://demo.immich.app`, `demo@immich.app` / `demo`). The TV stores only a limited API key; revoke it any time in Immich › Account Settings › API Keys.
+  - Emulator tip: `adb forward tcp:8942 tcp:8942`, then open the link logged under `adb logcat -s GlumePairing` with `localhost:8942`.
+- **Profiles:** the accounts signed in on this TV; *Add user* pairs another account. Photos are still demo data until the real library layer lands.
 - **Home:** ◀ at column 0 opens the rail. Back goes from content to the rail to Home.
 - **Hold OK** on a photo, album, person or memory to open the context menu. **⏯** starts a slideshow from the focused item.
 - **Viewer:** ◀ ▶ browse, ▲ ▼ zoom, OK shows or hides the info overlay. Videos play a public test clip.

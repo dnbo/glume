@@ -8,7 +8,6 @@ import com.android.glume.domain.Memory
 import com.android.glume.domain.Person
 import com.android.glume.domain.Place
 import com.android.glume.domain.SearchFilter
-import com.android.glume.domain.ServerCheck
 import com.android.glume.domain.ServerInfo
 import com.android.glume.domain.TimeBucket
 import com.android.glume.domain.User
@@ -31,10 +30,7 @@ interface ImmichRepository {
     /** Asset ids the current user has favorited. Updated optimistically by [setFavorite]. */
     val favoriteIds: StateFlow<Set<String>>
 
-    suspend fun connect(serverUrl: String, email: String, password: String): ServerCheck
     suspend fun serverInfo(): ServerInfo
-    suspend fun users(): List<User>
-    suspend fun user(id: String): User?
 
     suspend fun home(user: User): HomeData
 

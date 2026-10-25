@@ -15,7 +15,6 @@ import com.android.glume.domain.Memory
 import com.android.glume.domain.Person
 import com.android.glume.domain.Place
 import com.android.glume.domain.SearchFilter
-import com.android.glume.domain.ServerCheck
 import com.android.glume.domain.ServerInfo
 import com.android.glume.domain.TimeBucket
 import com.android.glume.domain.User
@@ -102,20 +101,7 @@ class MockImmichRepository(private val context: Context) : ImmichRepository {
 
     private suspend fun latency(ms: Long = 280) = delay(ms)
 
-    override suspend fun connect(serverUrl: String, email: String, password: String): ServerCheck {
-        latency(1400)
-        val host = serverUrl.trim().lowercase().removeSuffix("/").removePrefix("https://").removePrefix("http://")
-        return if (host == DEMO_HOST) ServerCheck.Ok
-        else ServerCheck.Unreachable(host, "Connection timed out after 10 seconds")
-    }
-
     override suspend fun serverInfo() = ServerInfo("https://$DEMO_HOST", 18, 48_210, 2_306, 1_420_000_000_000L, 4_000_000_000_000L)
-
-    override suspend fun users(): List<User> = MockLibrary.USERS.mapIndexed { i, u ->
-        User("u$i", u.name, u.email, u.avatar?.let(::avatarUrl), u.role, u.empty)
-    }
-
-    override suspend fun user(id: String): User? = users().firstOrNull { it.id == id }
 
     override suspend fun home(user: User): HomeData {
         ensureLoaded(); latency()
